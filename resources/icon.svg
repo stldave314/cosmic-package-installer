@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <title>Package Installer</title>
+  <defs>
+    <linearGradient id="box" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8ab4f8"/>
+      <stop offset="1" stop-color="#4a7fd4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Carton body -->
+  <path d="M64 34 L108 52 L108 100 L64 118 L20 100 L20 52 Z"
+        fill="url(#box)"/>
+  <!-- Lid, drawn lighter so the box reads as three-dimensional at small sizes -->
+  <path d="M64 10 L108 28 L108 52 L64 34 L20 52 L20 28 Z"
+        fill="#a8c7fa"/>
+  <!-- Seam down the front face -->
+  <path d="M64 34 L64 118" stroke="#2f5aa8" stroke-width="3" fill="none" opacity="0.5"/>
+
+  <!-- Install arrow, the one element that distinguishes this from a plain
+       package icon -->
+  <g transform="translate(64 76)">
+    <circle r="26" fill="#1b1b1f" opacity="0.35"/>
+    <circle r="23" fill="#ffffff"/>
+    <path d="M0 -13 L0 7 M-9 -2 L0 7 L9 -2"
+          stroke="#2f5aa8" stroke-width="5"
+          stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M-10 13 L10 13" stroke="#2f5aa8" stroke-width="5" stroke-linecap="round"/>
+  </g>
+</svg>

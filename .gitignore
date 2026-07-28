@@ -1,0 +1,15 @@
+/target
+/dist
+Cargo.lock.orig
+
+# Claude Code working files
+/.claude/
+
+# Editor and OS noise
+*.swp
+*~
+.DS_Store
+
+# Python bytecode from the locale tools
+__pycache__/
+*.pyc

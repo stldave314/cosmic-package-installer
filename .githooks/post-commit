@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+#
+# Bump the version after a commit that changes what the software does, and fold
+# the bump into that same commit.
+#
+#   feat:  minor      fix:  patch      feat!: / BREAKING CHANGE:  major
+#
+# Everything else — docs, chore, build, refactor, test, ci, style — leaves the
+# version alone.
+#
+# This runs post-commit rather than pre-commit because the decision needs the
+# commit message, which does not exist yet when pre-commit runs; and not in
+# prepare-commit-msg, because changes staged there do not reach the commit.
+#
+# Install with `./install.sh hooks`.
+set -euo pipefail
+
+# `git commit --amend` below fires this hook again. Without this guard that
+# recurses until the version has run away.
+[ -n "${SKIP_VERSION_BUMP:-}" ] && exit 0
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+message="$(git log -1 --pretty=%B)"
+subject="$(printf '%s\n' "$message" | head -1)"
+
+# type(optional scope)(optional !): subject
+if [[ ! "$subject" =~ ^([a-zA-Z]+)(\([^\)]*\))?(!)?:\ (.*)$ ]]; then
+    exit 0
+fi
+type="${BASH_REMATCH[1],,}"
+breaking="${BASH_REMATCH[3]}"
+
+if [ -n "$breaking" ] || printf '%s\n' "$message" | grep -q '^BREAKING CHANGE:'; then
+    bump="major"
+else
+    case "$type" in
+        feat) bump="minor" ;;
+        fix)  bump="patch" ;;
+        *)    exit 0 ;;
+    esac
+fi
+
+command -v python3 >/dev/null 2>&1 || { echo "post-commit: python3 not found; version not bumped" >&2; exit 0; }
+
+new="$(python3 tools/bump-version.py "$bump" --note "$subject")"
+
+git add Cargo.toml Cargo.lock resources/app.metainfo.xml
+SKIP_VERSION_BUMP=1 git commit --amend --no-edit --no-verify --quiet
+
+echo "post-commit: version bumped to $new ($bump, from '$type')"

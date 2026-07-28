@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.github.cosmic_package_installer</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0</project_license>
+
+  <name>Package Installer</name>
+  <summary>Install and inspect package files</summary>
+
+  <description>
+    <p>
+      A COSMIC Desktop application for opening a package file you have
+      downloaded, seeing exactly what is in it, and installing it.
+    </p>
+    <p>It shows:</p>
+    <ul>
+      <li>the application icon and name taken from the package itself</li>
+      <li>the version, and whether that version is already installed</li>
+      <li>the full metadata, and the list of files the package installs</li>
+      <li>
+        every declared dependency, marked according to whether it is already
+        installed, available from your package manager, or missing
+      </li>
+      <li>
+        what installing would really do — including packages pulled in
+        indirectly — with download and disk-space figures
+      </li>
+    </ul>
+    <p>
+      Install, upgrade, downgrade, reinstall and uninstall are all offered as
+      appropriate for what is already on the system. Privileged operations go
+      through PackageKit where it is available, and fall back to the
+      distribution's own tools under polkit where it is not; the application
+      itself never runs as root.
+    </p>
+    <p>
+      Debian packages are fully supported. RPM, Flatpak and AppImage support is
+      in progress — the application reports honestly which formats the system
+      it is running on can handle.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">com.github.cosmic_package_installer.desktop</launchable>
+
+  <categories>
+    <category>System</category>
+    <category>PackageManager</category>
+  </categories>
+
+  <keywords>
+    <keyword>deb</keyword>
+    <keyword>rpm</keyword>
+    <keyword>flatpak</keyword>
+    <keyword>appimage</keyword>
+    <keyword>package</keyword>
+    <keyword>install</keyword>
+  </keywords>
+
+  <provides>
+    <binary>cosmic-package-installer</binary>
+  </provides>
+
+  <content_rating type="oars-1.1"/>
+
+  <url type="homepage">https://github.com/stldave314/cosmic-package-installer</url>
+  <url type="bugtracker">https://github.com/stldave314/cosmic-package-installer/issues</url>
+
+  <releases>
+    <release version="0.1.0" date="2026-07-26">
+      <description>
+        <p>
+          First release. Debian package support: inspection, dependency status,
+          resolved install plan, and install, upgrade, downgrade, reinstall and
+          uninstall via PackageKit or apt.
+        </p>
+      </description>
+    </release>
+  </releases>
+</component>

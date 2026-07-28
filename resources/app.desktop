@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Name=Package Installer
+GenericName=Package Installer
+Comment=Install and inspect package files
+Exec=cosmic-package-installer %f
+Icon=com.github.cosmic_package_installer
+Terminal=false
+Categories=System;PackageManager;Settings;
+Keywords=deb;rpm;flatpak;appimage;package;install;software;
+StartupNotify=true
+StartupWMClass=com.github.cosmic_package_installer
+# Registering these makes the application the handler offered when a package
+# file is activated in a file manager, which is how it is normally launched.
+# `%f` above is a single local path: none of the backends can read a package
+# over a URI, so `%U` would hand us something we cannot open.
+MimeType=application/vnd.debian.binary-package;application/x-deb;application/x-debian-package;application/x-rpm;application/x-redhat-package-manager;application/vnd.flatpak;application/vnd.flatpak.ref;application/vnd.appimage;application/x-iso9660-appimage;

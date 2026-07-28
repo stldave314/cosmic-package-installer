@@ -1,0 +1,58 @@
+name: Build and check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # libcosmic pulls in the usual Wayland/graphics stack, plus libxkbcommon
+      # for keyboard handling. Without these the build fails at link time with
+      # errors that give no hint what is missing.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libudev-dev \
+            libinput-dev \
+            libgbm-dev \
+            libseat-dev \
+            libssl-dev \
+            pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Runs the same checks as `./install.sh check`, but as separate steps so a
+      # failure names which one broke without having to read the log.
+      - name: cargo check
+        run: cargo check --all-targets
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets
+
+      - name: cargo test
+        run: cargo test
+
+      # Locale problems never fail a build on their own — a missing key falls
+      # back to English at runtime — so they have to be checked explicitly.
+      - name: Locale consistency
+        run: python3 tools/check-locales.py
+
+      - name: Release build
+        run: ./install.sh build

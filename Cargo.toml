@@ -1,0 +1,81 @@
+[package]
+name = "cosmic-package-installer"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0"
+description = "A COSMIC Desktop package installer for .deb, .rpm, .flatpak and .appimage files"
+repository = "https://github.com/stldave314/cosmic-package-installer"
+
+[features]
+# Enabled by the packaging targets in install.sh. Forces diagnostic logging off
+# at compile time so a release can never ship with it on, regardless of the
+# `ENABLED` switch in src/debug.rs.
+release-build = []
+
+[dependencies]
+futures-util = "0.3"
+i18n-embed-fl = "0.10"
+rust-embed = "8"
+tokio = { version = "1", features = ["full"] }
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+serde = { version = "1", features = ["derive"] }
+
+[dependencies.i18n-embed]
+version = "0.16"
+features = ["fluent-system", "desktop-requester"]
+
+[dependencies.libcosmic]
+git = "https://github.com/pop-os/libcosmic.git"
+default-features = false
+features = [
+    "dbus-config",
+    "multi-window",
+    "single-instance",
+    "tokio",
+    "wayland",
+    "wgpu",
+    "winit",
+    "xdg-portal",
+]
+
+# Strip symbols from release builds — smaller binary and smaller packages.
+[profile.release]
+strip = true
+
+# ── Packaging metadata ──────────────────────────────────────────────────────
+# .deb via `cargo deb` (cargo-deb). Installs to the same paths as install.sh.
+# `$auto` resolves shared-lib deps.
+[package.metadata.deb]
+maintainer = "Dave <stldave314@users.noreply.github.com>"
+copyright = "2026, Dave"
+license-file = ["LICENSE", "0"]
+section = "admin"
+priority = "optional"
+depends = "$auto"
+# Runtime helpers. PackageKit is the preferred privileged path; the pkexec
+# fallback needs policykit-1. No polkit policy of our own is shipped: pkexec is
+# invoked on apt-get directly, so polkit's standard administrator prompt applies
+# and names the program that is actually about to run.
+recommends = "packagekit, policykit-1"
+extended-description = """
+A COSMIC Desktop application for inspecting and installing local package \
+files. Shows the application icon, version and metadata, the file list, and \
+the dependency list with per-dependency install status, then installs, \
+upgrades or removes the package. Supports .deb, .rpm, .flatpak and .appimage \
+files, enabling each format only when the system can handle it."""
+assets = [
+    ["target/release/cosmic-package-installer", "usr/bin/", "755"],
+    ["resources/app.desktop", "usr/share/applications/com.github.cosmic_package_installer.desktop", "644"],
+    ["resources/app.metainfo.xml", "usr/share/metainfo/com.github.cosmic_package_installer.metainfo.xml", "644"],
+    ["resources/icon.svg", "usr/share/icons/hicolor/scalable/apps/com.github.cosmic_package_installer.svg", "644"],
+]
+
+# .rpm via `cargo generate-rpm` (cargo-generate-rpm). Requires a prior release
+# build; dependencies are auto-detected.
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/cosmic-package-installer", dest = "/usr/bin/cosmic-package-installer", mode = "755" },
+    { source = "resources/app.desktop", dest = "/usr/share/applications/com.github.cosmic_package_installer.desktop", mode = "644" },
+    { source = "resources/app.metainfo.xml", dest = "/usr/share/metainfo/com.github.cosmic_package_installer.metainfo.xml", mode = "644" },
+    { source = "resources/icon.svg", dest = "/usr/share/icons/hicolor/scalable/apps/com.github.cosmic_package_installer.svg", mode = "644" },
+]
