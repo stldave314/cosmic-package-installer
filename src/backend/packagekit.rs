@@ -22,7 +22,9 @@ use futures_util::StreamExt;
 use zbus::{proxy, zvariant::OwnedObjectPath, Connection};
 
 use super::{Error, Progress, Result};
-use crate::constants::{PK_FLAG_NONE, PK_PROBE_TIMEOUT};
+use crate::constants::{
+    PK_ERROR_GRACE, PK_ERROR_NOT_AUTHORIZED, PK_FLAG_NONE, PK_HINTS, PK_PROBE_TIMEOUT,
+};
 use crate::debug::PK;
 use crate::debug_log;
 
@@ -42,9 +44,12 @@ const FILTER_INSTALLED: u64 = 1 << 2;
 
 /// D-Bus error names PackageKit raises when polkit declines.
 ///
-/// Matched by name rather than by the numeric `ErrorCode` signal because
-/// authentication failures surface as an error *reply to the method call*,
-/// before any transaction signal is emitted.
+/// These cover the case where the daemon refuses the *method call* outright.
+/// They are not the only way a refusal arrives: when the daemon accepts the
+/// call and then fails to authenticate, the call returns `Ok` and the refusal
+/// comes back as an `ErrorCode` signal carrying
+/// [`PK_ERROR_NOT_AUTHORIZED`](crate::constants::PK_ERROR_NOT_AUTHORIZED),
+/// which [`drive`] handles. Both paths have to be covered.
 const NOT_AUTHORIZED_ERRORS: &[&str] = &[
     "org.freedesktop.PackageKit.Transaction.RefusedByPolicy",
     "org.freedesktop.PackageKit.Transaction.NotAuthorized",
@@ -71,6 +76,12 @@ trait PackageKit {
     default_service = "org.freedesktop.PackageKit"
 )]
 trait Transaction {
+    /// Tell the daemon how this transaction is being run, before starting it.
+    ///
+    /// The `interactive` hint is what allows polkit to prompt; see
+    /// [`PK_HINTS`](crate::constants::PK_HINTS).
+    fn set_hints(&self, hints: &[&str]) -> zbus::Result<()>;
+
     fn install_files(&self, transaction_flags: u64, full_paths: &[&str]) -> zbus::Result<()>;
 
     fn remove_packages(
@@ -231,17 +242,30 @@ pub fn remove_package(
 }
 
 /// Create a transaction proxy for a fresh transaction object.
+///
+/// The hints are set here rather than at each call site because they describe
+/// the session the transaction runs in, which is the same for all of them, and
+/// because a transaction that starts without them cannot be authenticated.
 async fn new_transaction(connection: &Connection) -> Result<TransactionProxy<'static>> {
     let daemon = PackageKitProxy::new(connection)
         .await
         .map_err(map_zbus_error)?;
     let path = daemon.create_transaction().await.map_err(map_zbus_error)?;
-    TransactionProxy::builder(connection)
+    let transaction = TransactionProxy::builder(connection)
         .path(path)
         .map_err(map_zbus_error)?
         .build()
         .await
-        .map_err(map_zbus_error)
+        .map_err(map_zbus_error)?;
+
+    // A daemon too old to know the hint rejects the call; that is not worth
+    // failing the operation over, since the operation may not need authorising
+    // at all. The refusal it would otherwise cause is reported when it happens.
+    if let Err(error) = transaction.set_hints(PK_HINTS).await {
+        debug_log!(PK, "SetHints was refused: {error}");
+    }
+
+    Ok(transaction)
 }
 
 /// Find the PackageKit identifier of the installed package called `name`.
@@ -322,18 +346,43 @@ where
     start(transaction.clone()).await.map_err(map_zbus_error)?;
 
     let mut failure: Option<String> = None;
+    let mut failure_code: Option<u32> = None;
 
     let outcome = tokio::time::timeout(timeout, async {
         loop {
             tokio::select! {
                 Some(signal) = finished.next() => {
-                    return signal.args().map(|args| *args.exit()).unwrap_or(0);
+                    let exit = signal.args().map(|args| *args.exit()).unwrap_or(0);
+
+                    // `Finished` routinely arrives before the `ErrorCode` that
+                    // explains it, and returning here would discard the only
+                    // thing that tells the user what went wrong. Wait briefly
+                    // for one that is already in flight.
+                    if failure.is_none() && exit != EXIT_SUCCESS {
+                        if let Ok(Some(signal)) =
+                            tokio::time::timeout(PK_ERROR_GRACE, errors.next()).await
+                        {
+                            if let Ok(args) = signal.args() {
+                                debug_log!(
+                                    PK,
+                                    "ErrorCode {} (after Finished): {}",
+                                    args.code(),
+                                    args.details()
+                                );
+                                failure_code = Some(*args.code());
+                                failure = Some(args.details().to_string());
+                            }
+                        }
+                    }
+
+                    return exit;
                 }
                 Some(signal) = errors.next() => {
                     if let Ok(args) = signal.args() {
                         let details = args.details().to_string();
                         debug_log!(PK, "ErrorCode {}: {details}", args.code());
                         on_progress(Progress::Status(details.clone()));
+                        failure_code = Some(*args.code());
                         failure = Some(details);
                     }
                 }
@@ -377,6 +426,11 @@ where
     match exit {
         EXIT_SUCCESS => Ok(()),
         EXIT_CANCELLED => Err(Error::NotAuthorized),
+        // A refused or dismissed authentication is not a package-manager
+        // failure and must not be reported as one: there is nothing wrong with
+        // the package, and the message the user needs is "you were not
+        // authorised", not the daemon's phrasing of it.
+        _ if failure_code == Some(PK_ERROR_NOT_AUTHORIZED) => Err(Error::NotAuthorized),
         _ => Err(Error::PackageKit {
             detail: failure.unwrap_or_else(|| format!("transaction failed (exit code {exit})")),
         }),

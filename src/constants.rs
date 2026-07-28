@@ -111,6 +111,31 @@ pub const PK_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
 /// so the daemon performs the operation rather than simulating it.
 pub const PK_FLAG_NONE: u64 = 1 << 0;
 
+/// Hints set on every transaction before it starts.
+///
+/// `interactive=true` is the one that matters: it is how a client tells
+/// PackageKit that a person is waiting, which PackageKit passes to polkit as
+/// permission to open an authentication dialog. Without it polkit is asked
+/// non-interactively, refuses anything needing an administrator, and the
+/// transaction fails with "Failed to obtain authentication" having never
+/// prompted for anything.
+pub const PK_HINTS: &[&str] = &["interactive=true"];
+
+/// `PkErrorEnum` value for a transaction polkit would not authorise.
+///
+/// Taken from the daemon's own `ErrorCode` signal rather than a header: the
+/// development headers are not a runtime dependency, and the value is part of
+/// the wire protocol, not of any library this links against.
+pub const PK_ERROR_NOT_AUTHORIZED: u32 = 48;
+
+/// How long to keep listening for an `ErrorCode` signal after `Finished`.
+///
+/// PackageKit emits the two in either order, and the one that says *why* a
+/// transaction failed frequently arrives second. Returning the moment
+/// `Finished` lands therefore throws away the explanation; this is how long it
+/// is worth waiting for one that is already on its way.
+pub const PK_ERROR_GRACE: Duration = Duration::from_millis(500);
+
 // ── Native tool fallbacks ───────────────────────────────────────────────────
 
 /// Programs used by the `.deb` backend, looked up on `PATH`. Inspection needs

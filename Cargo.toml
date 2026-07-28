@@ -1,6 +1,6 @@
 [package]
 name = "cosmic-package-installer"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "GPL-3.0"
 description = "A COSMIC Desktop package installer for .deb, .rpm, .flatpak and .appimage files"

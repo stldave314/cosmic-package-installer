@@ -66,6 +66,11 @@
   <url type="bugtracker">https://github.com/stldave314/cosmic-package-installer/issues</url>
 
   <releases>
+    <release version="0.1.1" date="2026-07-28">
+      <description>
+        <p>fix: ask PackageKit for an interactive transaction so polkit can prompt</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-07-26">
       <description>
         <p>
