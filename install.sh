@@ -216,7 +216,13 @@ do_tarball() {
     local name="$APP_NAME-$(version)-$(uname -m)"
     local staging
     staging="$(mktemp -d)"
-    trap 'rm -rf "$staging"' RETURN
+
+    # Cleaned up on EXIT rather than RETURN. A RETURN trap is not scoped to the
+    # function that set it: it stays armed and fires again when the *caller*
+    # returns, by which point `staging` is out of scope and `set -u` aborts the
+    # script — after the tarball has been written, so the artefact looks fine
+    # and only the exit status says otherwise.
+    trap 'rm -rf "${staging:-}"' EXIT
 
     info "Building tarball"
     install -Dm755 "$BIN" "$staging/$name/bin/$APP_NAME"
@@ -227,6 +233,10 @@ do_tarball() {
     install -Dm644 README.md "$staging/$name/README.md"
 
     tar -czf "$DIST_DIR/$name.tar.gz" -C "$staging" "$name"
+
+    rm -rf "$staging"
+    trap - EXIT
+
     info "Wrote $DIST_DIR/$name.tar.gz"
 }
 
