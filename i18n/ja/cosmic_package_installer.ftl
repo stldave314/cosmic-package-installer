@@ -48,6 +48,8 @@ progress-reinstalling = 再インストール中
 progress-upgrading = 更新中
 progress-downgrading = ダウングレード中
 progress-removing = アンインストール中
+progress-copying = AppImage をコピーしています…
+progress-integrating = アプリケーション一覧に追加しています…
 operation-complete = 正常に完了しました
 operation-failed = 操作は完了しませんでした
 
@@ -66,6 +68,9 @@ meta-installed-size = インストール後のサイズ
 meta-file-size = ファイルサイズ
 meta-path = ファイル
 meta-description = 説明
+version-unknown = 不明
+meta-appimage-metadata = メタデータ
+meta-appimage-unread = ファイルから読み取れなかったため、名前とサイズのみ表示しています。
 
 # Dependency kinds
 dep-pre-depends = インストール前に必要
@@ -85,6 +90,8 @@ dep-status-missing = 入手できません
 dep-status-unknown = 未確認
 dep-alternatives = または
 dependencies-none = このパッケージは依存関係を宣言していません。
+dependencies-bundled = AppImage は必要なものをすべて内包しているため、追加でインストールするものはありません。
+dependencies-flatpak = このファイルはランタイムを宣言していません。Flatpak がインストール時に必要なものを判断します。
 dependencies-resolving = システム上の依存関係を確認しています…
 dependencies-unsatisfiable = { $count ->
    *[other] 必須の依存関係 { $count } 件を満たせません。
@@ -107,6 +114,7 @@ plan-blocked = このパッケージは現在の状態ではインストール�
 
 # Files
 files-none = このパッケージはファイルをインストールしません。
+files-unavailable = Flatpak バンドルはファイル一覧を持たないため、全体を展開しない限り内容を一覧表示できません。
 files-hidden = ファイル一覧は設定で無効になっています。
 files-count = { $count ->
    *[other] { $count } 個のファイル
@@ -134,6 +142,9 @@ settings-privilege-backend = インストール方法
 privilege-auto = PackageKit またはシステムツール
 privilege-packagekit = PackageKit のみ
 privilege-native = システムツールのみ
+settings-flatpak-scope = Flatpak のインストール対象
+flatpak-scope-user = 自分のみ
+flatpak-scope-system = このコンピューターの全ユーザー
 settings-show-recommends = 推奨パッケージを表示
 settings-show-suggests = 提案パッケージを表示
 settings-show-file-list = ファイル一覧を表示

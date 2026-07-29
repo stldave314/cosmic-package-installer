@@ -48,6 +48,8 @@ progress-reinstalling = 正在重新安装
 progress-upgrading = 正在升级
 progress-downgrading = 正在降级
 progress-removing = 正在卸载
+progress-copying = 正在复制 AppImage…
+progress-integrating = 正在添加到您的应用程序…
 operation-complete = 已成功完成
 operation-failed = 操作未能完成
 
@@ -66,6 +68,9 @@ meta-installed-size = 安装后大小
 meta-file-size = 文件大小
 meta-path = 文件
 meta-description = 描述
+version-unknown = 未知
+meta-appimage-metadata = 元数据
+meta-appimage-unread = 无法从文件中读取，因此仅显示名称和大小。
 
 # Dependency kinds
 dep-pre-depends = 安装前必需
@@ -85,6 +90,8 @@ dep-status-missing = 不可用
 dep-status-unknown = 未检查
 dep-alternatives = 或
 dependencies-none = 此软件包未声明任何依赖。
+dependencies-bundled = AppImage 自带所需的一切，因此无需额外安装任何内容。
+dependencies-flatpak = 此文件未声明运行时。Flatpak 会在安装时确定所需内容。
 dependencies-resolving = 正在对照您的系统检查依赖…
 dependencies-unsatisfiable = { $count ->
    *[other] 有 { $count } 项必需依赖无法满足。
@@ -107,6 +114,7 @@ plan-blocked = 此软件包在当前状态下无法安装：
 
 # Files
 files-none = 此软件包不安装任何文件。
+files-unavailable = Flatpak 捆绑包不包含文件索引，因此不完整解包就无法列出其内容。
 files-hidden = 文件列表已在设置中关闭。
 files-count = { $count ->
    *[other] { $count } 个文件
@@ -134,6 +142,9 @@ settings-privilege-backend = 安装方式
 privilege-auto = PackageKit 或系统工具
 privilege-packagekit = 仅 PackageKit
 privilege-native = 仅系统工具
+settings-flatpak-scope = Flatpak 安装范围
+flatpak-scope-user = 仅限我
+flatpak-scope-system = 此计算机上的所有用户
 settings-show-recommends = 显示推荐的软件包
 settings-show-suggests = 显示建议的软件包
 settings-show-file-list = 显示文件列表

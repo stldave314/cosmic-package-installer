@@ -47,12 +47,33 @@ pub enum PrivilegeBackend {
     Native,
 }
 
+/// Which Flatpak installation an install goes to.
+///
+/// This is a user setting rather than a tuning value because the two are
+/// genuinely different choices with different consequences, and neither is
+/// right for everyone: a user install needs no password and is visible only to
+/// the person who made it, while a system install needs administrator rights
+/// and serves every account on the machine.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub enum FlatpakScope {
+    /// Install under `~/.local/share/flatpak`. Needs no privileges at all,
+    /// which is why it is the default: the common case for opening a downloaded
+    /// `.flatpak` is one person installing something for themselves, and asking
+    /// for a password to do it would be asking for one that is not needed.
+    #[default]
+    User,
+    /// Install for every user. Authorised by Flatpak's own polkit actions.
+    System,
+}
+
 #[derive(Clone, CosmicConfigEntry, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[version = 1]
 pub struct Config {
     pub app_theme: AppTheme,
     /// How privileged operations are performed.
     pub privilege_backend: PrivilegeBackend,
+    /// Where Flatpaks are installed.
+    pub flatpak_scope: FlatpakScope,
     /// Include `Recommends` alongside `Depends` in the dependency list.
     ///
     /// apt installs recommended packages by default, so leaving this on keeps
@@ -71,6 +92,7 @@ impl Default for Config {
         Self {
             app_theme: AppTheme::System,
             privilege_backend: PrivilegeBackend::Auto,
+            flatpak_scope: FlatpakScope::User,
             show_recommends: true,
             show_suggests: false,
             show_file_list: true,

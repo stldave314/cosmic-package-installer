@@ -88,9 +88,38 @@ pub const ICON_SEARCH_DIRS: &[&str] = &[
 ];
 
 /// File extensions accepted when extracting an icon from a package payload,
-/// most preferred first. Limited to what the toolkit can actually render — an
-/// `.xpm` found in `pixmaps` is no better than no icon at all.
-pub const ICON_EXTENSIONS: &[&str] = &["svg", "png"];
+/// most preferred first. Limited to what can actually be got onto the screen:
+/// `svg` and `png` the toolkit decodes itself, and `xpm` via [`crate::backend::xpm`].
+///
+/// `xpm` is last on purpose. It is a legacy format and the two ahead of it are
+/// better in every respect, so it is only reached when a package ships nothing
+/// else — which, for the older packages that still put an icon in `pixmaps`, is
+/// the difference between an icon and the generic placeholder.
+pub const ICON_EXTENSIONS: &[&str] = &["svg", "png", "xpm"];
+
+// ── XPM ─────────────────────────────────────────────────────────────────────
+//
+// Every bound here exists because the value it limits is read out of the file
+// being decoded. An XPM header states its own dimensions and colour count, and
+// a file that is malformed — or hostile — can state whatever it likes; without
+// these, `65535 65535` in a header is a 17 GB allocation.
+
+/// Largest XPM that will be decoded at all. Comfortably above any real icon:
+/// the largest on a typical system is a couple of hundred kilobytes.
+pub const XPM_MAX_INPUT_BYTES: usize = 16 * 1024 * 1024;
+
+/// Largest edge accepted, in pixels. An icon beyond this is not an icon, and
+/// the square of this bounds the output allocation.
+pub const XPM_MAX_DIMENSION: u32 = 1024;
+
+/// Largest colour table accepted. Real icons are well inside this — the biggest
+/// found on this machine uses 1770.
+pub const XPM_MAX_COLORS: usize = 65_536;
+
+/// Longest per-pixel key accepted. Two is universal in practice; four allows
+/// for an unusually large palette without allowing a key long enough to make
+/// row parsing expensive.
+pub const XPM_MAX_CHARS_PER_PIXEL: usize = 4;
 
 /// Shown in place of the application icon when the package carries none.
 pub const FALLBACK_ICON: &str = "package-x-generic";
@@ -150,6 +179,90 @@ pub const DEB_APT_TOOL: &str = "apt-get";
 /// available. Invoked without a registered polkit action, so it falls back to
 /// the standard `org.freedesktop.policykit.exec` prompt.
 pub const PKEXEC: &str = "pkexec";
+
+/// Everything the Flatpak backend needs is behind this one program. Note that
+/// it is *not* routed through [`PKEXEC`]: a user-scope install needs no
+/// privileges at all, and a system-scope one is authorised by Flatpak's own
+/// polkit actions inside its system helper.
+pub const FLATPAK_TOOL: &str = "flatpak";
+
+/// Refreshes the desktop entry database after an AppImage is integrated or
+/// removed. Absent on a minimal system, in which case the new entry simply
+/// appears at the next login instead of immediately.
+pub const DESKTOP_DATABASE_TOOL: &str = "update-desktop-database";
+
+// ── Flatpak bundle header ───────────────────────────────────────────────────
+
+/// Sanity bound on the number of entries in a bundle's metadata dictionary.
+///
+/// A real bundle has around ten. The bound exists because the entry count is
+/// derived from a length read out of the file itself, and a corrupt or hostile
+/// file must not be able to turn that into an unbounded allocation.
+pub const BUNDLE_MAX_HEADER_ENTRIES: usize = 4_096;
+
+/// How much of a header entry is read to recover its key.
+///
+/// Keys are short and sit at the start of the entry, so this is enough to
+/// identify one without reading its value — which matters because the
+/// compressed payload of the whole bundle is stored as a header entry too, and
+/// may be gigabytes.
+pub const BUNDLE_KEY_PROBE_BYTES: u64 = 512;
+
+/// Largest header entry whose value is read. Comfortably above the biggest
+/// field of interest (an embedded 128×128 icon) and far below the payload
+/// entries, which are skipped by size.
+pub const BUNDLE_MAX_VALUE_BYTES: u64 = 4 * 1024 * 1024;
+
+// ── AppImage ────────────────────────────────────────────────────────────────
+
+/// The two bytes following the ELF header that identify an AppImage, at
+/// [`APPIMAGE_MAGIC_OFFSET`]. The byte after them is the format revision: `1`
+/// for the original ISO-9660 layout, `2` for the SquashFS one in use since.
+pub const APPIMAGE_MAGIC: [u8; 2] = [0x41, 0x49];
+pub const APPIMAGE_MAGIC_OFFSET: u64 = 8;
+
+/// Largest AppImage that will be copied to a temporary directory in order to
+/// run it for its metadata.
+///
+/// The copy is only made when the user has consented to running the file (by
+/// pressing Install) and it is not already executable. Beyond this size the
+/// operation falls back to what the file name and the ELF header alone can say.
+pub const APPIMAGE_MAX_INSPECT_COPY: u64 = 2 * 1024 * 1024 * 1024;
+
+/// Largest file the extraction is allowed to read back — desktop entry,
+/// AppStream document or icon.
+///
+/// Everything read here was written by the AppImage's own runtime out of a
+/// SquashFS the file controls, so its size is attacker-chosen. Without a cap a
+/// bundle carrying a multi-gigabyte `metainfo.xml` would have it read whole into
+/// memory during inspection. Comfortably above any real metadata file.
+pub const APPIMAGE_MAX_METADATA_BYTES: u64 = 16 * 1024 * 1024;
+
+/// Directory the AppImage runtime extracts into, relative to the working
+/// directory it is run from. Fixed by the runtime, not a choice.
+pub const APPIMAGE_EXTRACT_DIR: &str = "squashfs-root";
+
+/// Where an integrated AppImage and its desktop files are placed, relative to
+/// the user's home directory.
+///
+/// All three are under `$HOME` on purpose: integrating an AppImage needs no
+/// administrator rights, and taking them anyway would be asking for a password
+/// to copy a file the user already owns.
+pub const APPIMAGE_INSTALL_DIR: &str = ".local/bin";
+pub const APPIMAGE_DESKTOP_DIR: &str = ".local/share/applications";
+pub const APPIMAGE_ICON_DIR: &str = ".local/share/icons/hicolor";
+
+/// Desktop-entry keys written into an integrated AppImage's `.desktop` file.
+///
+/// `X-AppImage-Source` is what makes the entry recognisable as ours on a later
+/// run: it records the integrated copy's path, which is how the backend answers
+/// "is this already installed" without a package database to ask.
+pub const APPIMAGE_KEY_SOURCE: &str = "X-AppImage-Source";
+pub const APPIMAGE_KEY_VERSION: &str = "X-AppImage-Version";
+
+/// How often the copy progress of an integration is reported, in bytes.
+/// Small enough for a smooth bar, large enough not to flood the UI thread.
+pub const APPIMAGE_COPY_CHUNK: usize = 4 * 1024 * 1024;
 
 /// Environment forced on every external command so its output is parseable.
 /// Without this, apt and dpkg translate their output and the parser breaks in

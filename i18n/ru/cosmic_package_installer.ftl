@@ -48,6 +48,8 @@ progress-reinstalling = Переустановка
 progress-upgrading = Обновление
 progress-downgrading = Откат версии
 progress-removing = Удаление
+progress-copying = Копирование AppImage…
+progress-integrating = Добавление в список приложений…
 operation-complete = Успешно завершено
 operation-failed = Операция не была завершена
 
@@ -66,6 +68,9 @@ meta-installed-size = Размер после установки
 meta-file-size = Размер файла
 meta-path = Файл
 meta-description = Описание
+version-unknown = Неизвестно
+meta-appimage-metadata = Метаданные
+meta-appimage-unread = Не удалось прочитать из файла, поэтому показаны только имя и размер.
 
 # Dependency kinds
 dep-pre-depends = Требуется до установки
@@ -85,6 +90,8 @@ dep-status-missing = Недоступен
 dep-status-unknown = Не проверено
 dep-alternatives = или
 dependencies-none = Этот пакет не объявляет зависимостей.
+dependencies-bundled = AppImage содержит всё необходимое, поэтому устанавливать больше нечего.
+dependencies-flatpak = Этот файл не указывает среду выполнения. Flatpak определит необходимое при установке.
 dependencies-resolving = Проверка зависимостей в системе…
 dependencies-unsatisfiable = { $count ->
     [one] { $count } обязательная зависимость не может быть удовлетворена.
@@ -113,6 +120,7 @@ plan-blocked = Этот пакет невозможно установить в 
 
 # Files
 files-none = Этот пакет не устанавливает файлов.
+files-unavailable = Пакет Flatpak не содержит списка файлов, поэтому его содержимое нельзя показать, не распаковав целиком.
 files-hidden = Список файлов отключён в параметрах.
 files-count = { $count ->
     [one] { $count } файл
@@ -143,6 +151,9 @@ settings-privilege-backend = Устанавливать через
 privilege-auto = PackageKit или системные средства
 privilege-packagekit = Только PackageKit
 privilege-native = Только системные средства
+settings-flatpak-scope = Устанавливать Flatpak для
+flatpak-scope-user = Только меня
+flatpak-scope-system = Всех на этом компьютере
 settings-show-recommends = Показывать рекомендуемые пакеты
 settings-show-suggests = Показывать предлагаемые пакеты
 settings-show-file-list = Показывать список файлов

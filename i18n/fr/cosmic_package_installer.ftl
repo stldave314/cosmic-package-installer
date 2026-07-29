@@ -48,6 +48,8 @@ progress-reinstalling = Réinstallation
 progress-upgrading = Mise à jour
 progress-downgrading = Retour à une version antérieure
 progress-removing = Désinstallation
+progress-copying = Copie de l’AppImage en cours…
+progress-integrating = Ajout à vos applications…
 operation-complete = Terminé avec succès
 operation-failed = L'opération ne s'est pas terminée
 
@@ -66,6 +68,9 @@ meta-installed-size = Taille installée
 meta-file-size = Taille du fichier
 meta-path = Fichier
 meta-description = Description
+version-unknown = Inconnue
+meta-appimage-metadata = Métadonnées
+meta-appimage-unread = Impossible de les lire dans le fichier ; seuls son nom et sa taille sont affichés.
 
 # Dependency kinds
 dep-pre-depends = Requis avant l'installation
@@ -85,6 +90,8 @@ dep-status-missing = Non disponible
 dep-status-unknown = Non vérifié
 dep-alternatives = ou
 dependencies-none = Ce paquet ne déclare aucune dépendance.
+dependencies-bundled = Les AppImages embarquent tout ce dont elles ont besoin ; il n’y a donc rien d’autre à installer.
+dependencies-flatpak = Ce fichier ne déclare aucun environnement d’exécution. Flatpak détermine ce qu’il faut au moment de l’installation.
 dependencies-resolving = Vérification des dépendances sur votre système…
 dependencies-unsatisfiable = { $count ->
     [one] { $count } dépendance requise ne peut pas être satisfaite.
@@ -109,6 +116,7 @@ plan-blocked = Ce paquet ne peut pas être installé en l'état :
 
 # Files
 files-none = Ce paquet n'installe aucun fichier.
+files-unavailable = Un bundle Flatpak ne contient pas d’index de fichiers ; son contenu ne peut donc pas être listé sans le décompresser entièrement.
 files-hidden = La liste des fichiers est désactivée dans les paramètres.
 files-count = { $count ->
     [one] { $count } fichier
@@ -137,6 +145,9 @@ settings-privilege-backend = Installer avec
 privilege-auto = PackageKit, ou les outils système
 privilege-packagekit = PackageKit uniquement
 privilege-native = Outils système uniquement
+settings-flatpak-scope = Installer les Flatpaks pour
+flatpak-scope-user = Moi uniquement
+flatpak-scope-system = Tous les utilisateurs de cet ordinateur
 settings-show-recommends = Afficher les paquets recommandés
 settings-show-suggests = Afficher les paquets suggérés
 settings-show-file-list = Afficher la liste des fichiers

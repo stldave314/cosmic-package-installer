@@ -26,7 +26,7 @@ use crate::backend::{
     DependencyKind, DependencyStatus, InstalledState, OperationPlan, PackageDetails, PackageFormat,
     PayloadEntry, Progress,
 };
-use crate::config::{AppTheme, Config, PrivilegeBackend, CONFIG_VERSION};
+use crate::config::{AppTheme, Config, FlatpakScope, PrivilegeBackend, CONFIG_VERSION};
 use crate::constants::{
     APP_ICON, APP_ID, FALLBACK_ICON, ICON_SIZE_HEADER, ICON_SIZE_ROW, ISSUES_URL,
     MAX_CONTENT_WIDTH, MAX_FILES_SHOWN, REPOSITORY_URL,
@@ -49,6 +49,9 @@ const PRIVILEGE_OPTIONS: [PrivilegeBackend; 3] = [
     PrivilegeBackend::PackageKit,
     PrivilegeBackend::Native,
 ];
+
+/// Flatpak installation-scope choices, paired with `App::flatpak_scope_labels`.
+const FLATPAK_SCOPE_OPTIONS: [FlatpakScope; 2] = [FlatpakScope::User, FlatpakScope::System];
 
 /// Which section of the package is on screen.
 ///
@@ -137,6 +140,7 @@ pub enum Message {
 
     ConfigTheme(AppTheme),
     ConfigPrivilegeBackend(PrivilegeBackend),
+    ConfigFlatpakScope(FlatpakScope),
     ConfigShowRecommends(bool),
     ConfigShowSuggests(bool),
     ConfigShowFileList(bool),
@@ -192,6 +196,7 @@ pub struct App {
     /// Localized dropdown labels, held here because the widget borrows them.
     theme_labels: Vec<String>,
     privilege_labels: Vec<String>,
+    flatpak_scope_labels: Vec<String>,
 
     package: PackageState,
     /// Incremented for every file opened, to discard stale background results.
@@ -410,7 +415,7 @@ impl App {
 
     /// Persist one config change.
     fn save_config(&mut self) -> Task<Message> {
-        backend::privileged::set_preference(self.config.privilege_backend);
+        apply_config(&self.config);
         if let Some(handler) = &self.config_handler {
             if let Err(errors) = self.config.write_entry(handler) {
                 debug_log!(crate::debug::CONFIG, "failed to save config: {errors:?}");
@@ -419,6 +424,35 @@ impl App {
         }
         cosmic::task::message(cosmic::action::app(Message::None))
     }
+}
+
+/// Whether `url` is an `http`/`https` address safe to hand to `xdg-open`.
+///
+/// Deliberately strict: the scheme must be exactly one of these, so a package's
+/// "Homepage" cannot smuggle in `file://`, a custom scheme with a registered
+/// handler, or a leading-dash string that a helper might read as an option.
+fn is_web_url(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    for scheme in ["http://", "https://"] {
+        if let Some(rest) = lower.strip_prefix(scheme) {
+            // A scheme with something after it, and no control characters or
+            // whitespace that have no business being in a URL.
+            return !rest.is_empty()
+                && !url.contains(|c: char| c.is_whitespace() || c.is_control());
+        }
+    }
+    false
+}
+
+/// Push the settings that backends hold themselves out to those backends.
+///
+/// Two of them keep a process-wide preference rather than taking it as an
+/// argument, because it belongs to the session rather than to the package being
+/// operated on. Setting both in one place is what stops one of them being
+/// forgotten on a path that changes the config.
+fn apply_config(config: &Config) {
+    backend::privileged::set_preference(config.privilege_backend);
+    backend::flatpak::set_scope(config.flatpak_scope);
 }
 
 /// Look up the backend that handles an already-inspected package.
@@ -454,7 +488,7 @@ impl Application for App {
     }
 
     fn init(core: Core, flags: Self::Flags) -> (Self, Task<Self::Message>) {
-        backend::privileged::set_preference(flags.config.privilege_backend);
+        apply_config(&flags.config);
 
         let mut nav = nav_bar::Model::default();
         nav.insert()
@@ -483,6 +517,7 @@ impl Application for App {
                 fl!("privilege-packagekit"),
                 fl!("privilege-native"),
             ],
+            flatpak_scope_labels: vec![fl!("flatpak-scope-user"), fl!("flatpak-scope-system")],
             package: PackageState::Empty,
             generation: 0,
             nav,
@@ -606,9 +641,12 @@ impl Application for App {
                 let mut all = FileFilter::new(&fl!("supported-formats"));
                 let mut dialog = Dialog::new().title(fl!("open-package"));
                 for format in PackageFormat::ALL {
-                    let pattern = format!("*.{}", format.as_str());
-                    all = all.glob(&pattern);
-                    dialog = dialog.filter(FileFilter::new(&format.label()).glob(&pattern));
+                    let mut filter = FileFilter::new(&format.label());
+                    for pattern in format.globs() {
+                        all = all.glob(pattern);
+                        filter = filter.glob(pattern);
+                    }
+                    dialog = dialog.filter(filter);
                 }
                 dialog = dialog.current_filter(all.clone()).filter(all);
 
@@ -737,8 +775,17 @@ impl Application for App {
             }
 
             Message::LaunchUrl(url) => {
-                if let Err(error) = std::process::Command::new("xdg-open").arg(&url).spawn() {
-                    eprintln!("failed to open {url}: {error}");
+                // The homepage is read out of the package, so it is not to be
+                // trusted with `xdg-open`, which would hand a `file://` — or any
+                // scheme with a registered handler — straight to the desktop.
+                // Only real web links are opened; anything else is refused,
+                // since a "Homepage" that is not a web address is not one.
+                if is_web_url(&url) {
+                    if let Err(error) = std::process::Command::new("xdg-open").arg(&url).spawn() {
+                        eprintln!("failed to open {url}: {error}");
+                    }
+                } else {
+                    debug_log!(UI, "refusing to open non-web URL {url:?}");
                 }
                 Task::none()
             }
@@ -803,6 +850,18 @@ impl Application for App {
                 self.config.privilege_backend = value;
                 self.save_config()
             }
+            Message::ConfigFlatpakScope(value) => {
+                self.config.flatpak_scope = value;
+                let save = self.save_config();
+                // Whether the open package counts as installed, and what an
+                // uninstall would remove, both depend on the scope — so the
+                // package is re-read rather than left describing the other one.
+                let reload = match self.current_path() {
+                    Some(path) if self.has_package() => self.open(path),
+                    _ => Task::none(),
+                };
+                Task::batch([save, reload])
+            }
             Message::ConfigShowRecommends(value) => {
                 self.config.show_recommends = value;
                 self.save_config()
@@ -829,7 +888,7 @@ impl Application for App {
             Message::ConfigUpdated(config) => {
                 let theme_changed = config.app_theme != self.config.app_theme;
                 self.config = config;
-                backend::privileged::set_preference(self.config.privilege_backend);
+                apply_config(&self.config);
                 if theme_changed {
                     cosmic::command::set_theme(self.config.app_theme.theme())
                 } else {
@@ -1360,7 +1419,18 @@ impl App {
         }
 
         if loaded.details.dependencies.is_empty() && !loaded.resolving {
-            children.push(widget::text::body(fl!("dependencies-none")).into());
+            // "No dependencies" means something different in each format, and
+            // the same sentence for all of them would be wrong for two: an
+            // AppImage has none because it carries them, and a Flatpak
+            // reference has none listed because the file simply does not say.
+            children.push(
+                widget::text::body(match loaded.details.format {
+                    PackageFormat::AppImage => fl!("dependencies-bundled"),
+                    PackageFormat::Flatpak => fl!("dependencies-flatpak"),
+                    PackageFormat::Deb | PackageFormat::Rpm => fl!("dependencies-none"),
+                })
+                .into(),
+            );
         }
 
         for kind in DependencyKind::DISPLAY_ORDER {
@@ -1476,6 +1546,13 @@ impl App {
             return widget::text::body(fl!("files-hidden")).into();
         }
 
+        // A format that cannot enumerate its payload has to say so. An empty
+        // list here would read as "installs no files", which of a Flatpak
+        // bundle is the opposite of the truth.
+        if !loaded.details.payload_known {
+            return widget::text::body(fl!("files-unavailable")).into();
+        }
+
         let files: Vec<&PayloadEntry> = loaded
             .details
             .payload
@@ -1545,6 +1622,9 @@ impl App {
         let privilege_selected = PRIVILEGE_OPTIONS
             .iter()
             .position(|option| *option == self.config.privilege_backend);
+        let flatpak_scope_selected = FLATPAK_SCOPE_OPTIONS
+            .iter()
+            .position(|option| *option == self.config.flatpak_scope);
 
         widget::column::with_children(vec![
             widget::settings::section()
@@ -1563,6 +1643,14 @@ impl App {
                     widget::dropdown(&self.privilege_labels, privilege_selected, |index| {
                         Message::ConfigPrivilegeBackend(PRIVILEGE_OPTIONS[index])
                     }),
+                ))
+                .add(widget::settings::item(
+                    fl!("settings-flatpak-scope"),
+                    widget::dropdown(
+                        &self.flatpak_scope_labels,
+                        flatpak_scope_selected,
+                        |index| Message::ConfigFlatpakScope(FLATPAK_SCOPE_OPTIONS[index]),
+                    ),
                 ))
                 .add(widget::settings::item(
                     fl!("settings-show-recommends"),
@@ -1677,4 +1765,26 @@ fn dependency_row<'a>(dependency: &'a Dependency, spacing: u16) -> Element<'a, M
         .into(),
     ])
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_web_url;
+
+    #[test]
+    fn only_web_urls_are_opened() {
+        assert!(is_web_url("https://example.org/notes"));
+        assert!(is_web_url("http://example.org"));
+        assert!(is_web_url("HTTPS://Example.ORG/x"));
+
+        // The shapes a hostile "Homepage" might take.
+        assert!(!is_web_url("file:///etc/passwd"));
+        assert!(!is_web_url("smb://server/share"));
+        assert!(!is_web_url("javascript:alert(1)"));
+        assert!(!is_web_url("-forcedelete"));
+        assert!(!is_web_url("https://"));
+        assert!(!is_web_url("https://exa mple.org"));
+        assert!(!is_web_url("https://example.org/\nrm"));
+        assert!(!is_web_url(""));
+    }
 }

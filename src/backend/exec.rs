@@ -140,6 +140,22 @@ pub fn run<S: AsRef<OsStr>>(
     run_streaming(program, args, timeout, |_, _| {})
 }
 
+/// Run `program` with its working directory set to `dir`.
+///
+/// Exists for one job: an AppImage's `--appimage-extract` writes into a
+/// `squashfs-root` directory beside wherever it happens to be run from, with no
+/// option to say where. Pointing the child at a temporary directory is the only
+/// way to stop it depositing that in whatever directory the application was
+/// launched from.
+pub fn run_in_dir<S: AsRef<OsStr>>(
+    program: &str,
+    args: &[S],
+    dir: &std::path::Path,
+    timeout: Duration,
+) -> Result<Output, ExecError> {
+    run_inner(program, args, Some(dir), timeout, |_, _| {})
+}
+
 /// Run `program` to completion, invoking `on_line` for each line of output as
 /// it arrives, and also collecting that output into the returned [`Output`].
 ///
@@ -148,6 +164,16 @@ pub fn run<S: AsRef<OsStr>>(
 pub fn run_streaming<S: AsRef<OsStr>, F: FnMut(Stream, &str)>(
     program: &str,
     args: &[S],
+    timeout: Duration,
+    on_line: F,
+) -> Result<Output, ExecError> {
+    run_inner(program, args, None, timeout, on_line)
+}
+
+fn run_inner<S: AsRef<OsStr>, F: FnMut(Stream, &str)>(
+    program: &str,
+    args: &[S],
+    dir: Option<&std::path::Path>,
     timeout: Duration,
     mut on_line: F,
 ) -> Result<Output, ExecError> {
@@ -167,6 +193,9 @@ pub fn run_streaming<S: AsRef<OsStr>, F: FnMut(Stream, &str)>(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if let Some(dir) = dir {
+        command.current_dir(dir);
+    }
 
     let mut child = command.spawn().map_err(|source| {
         debug_log!(EXEC, "spawn of {program} failed: {source}");

@@ -1,6 +1,6 @@
 [package]
 name = "cosmic-package-installer"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 license = "GPL-3.0"
 description = "A COSMIC Desktop package installer for .deb, .rpm, .flatpak and .appimage files"
@@ -13,6 +13,16 @@ repository = "https://github.com/stldave314/cosmic-package-installer"
 release-build = []
 
 [dependencies]
+# A Flatpak bundle stores its AppStream data gzip-compressed inside the file
+# header, so reading a bundle's metadata means inflating it. Both of these are
+# already in the dependency graph by way of libcosmic, so naming them here adds
+# nothing to the build.
+flate2 = "1"
+# Held at 0.20 rather than 0.21 on purpose: libcosmic already pulls 0.20 in via
+# fontconfig-parser, so matching it costs nothing, while moving ahead would
+# compile a second copy for the handful of AppStream fields read here. Worth
+# revisiting when libcosmic's own tree moves on.
+roxmltree = "0.20"
 futures-util = "0.3"
 i18n-embed-fl = "0.10"
 rust-embed = "8"
@@ -57,12 +67,17 @@ depends = "$auto"
 # invoked on apt-get directly, so polkit's standard administrator prompt applies
 # and names the program that is actually about to run.
 recommends = "packagekit, policykit-1"
+# Only needed to handle the formats they belong to, and both are large enough
+# that pulling them onto a machine that has no use for them would be rude. A
+# format whose tools are absent is reported as unsupported rather than failing.
+suggests = "flatpak, fuse3"
 extended-description = """
 A COSMIC Desktop application for inspecting and installing local package \
 files. Shows the application icon, version and metadata, the file list, and \
 the dependency list with per-dependency install status, then installs, \
-upgrades or removes the package. Supports .deb, .rpm, .flatpak and .appimage \
-files, enabling each format only when the system can handle it."""
+upgrades or removes the package. Supports .deb, .flatpak and .appimage files, \
+with .rpm recognised but not yet implemented, and enables each format only \
+when the system can handle it."""
 assets = [
     ["target/release/cosmic-package-installer", "usr/bin/", "755"],
     ["resources/app.desktop", "usr/share/applications/com.github.cosmic_package_installer.desktop", "644"],

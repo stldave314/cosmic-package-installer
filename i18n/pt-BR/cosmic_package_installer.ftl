@@ -48,6 +48,8 @@ progress-reinstalling = Reinstalando
 progress-upgrading = Atualizando
 progress-downgrading = Revertendo versão
 progress-removing = Desinstalando
+progress-copying = Copiando o AppImage…
+progress-integrating = Adicionando aos seus aplicativos…
 operation-complete = Concluído com sucesso
 operation-failed = A operação não foi concluída
 
@@ -66,6 +68,9 @@ meta-installed-size = Tamanho instalado
 meta-file-size = Tamanho do arquivo
 meta-path = Arquivo
 meta-description = Descrição
+version-unknown = Desconhecida
+meta-appimage-metadata = Metadados
+meta-appimage-unread = Não foi possível lê-los do arquivo, portanto apenas o nome e o tamanho são exibidos.
 
 # Dependency kinds
 dep-pre-depends = Necessário antes da instalação
@@ -85,6 +90,8 @@ dep-status-missing = Indisponível
 dep-status-unknown = Não verificado
 dep-alternatives = ou
 dependencies-none = Este pacote não declara dependências.
+dependencies-bundled = Os AppImages incluem tudo o que precisam, portanto não há mais nada a instalar.
+dependencies-flatpak = Este arquivo não declara nenhum runtime. O Flatpak determina o que é necessário ao instalá-lo.
 dependencies-resolving = Verificando as dependências no seu sistema…
 dependencies-unsatisfiable = { $count ->
     [one] { $count } dependência necessária não pode ser satisfeita.
@@ -109,6 +116,7 @@ plan-blocked = Este pacote não pode ser instalado como está:
 
 # Files
 files-none = Este pacote não instala nenhum arquivo.
+files-unavailable = Um pacote Flatpak não traz um índice de arquivos, portanto seu conteúdo não pode ser listado sem descompactá-lo por inteiro.
 files-hidden = A lista de arquivos está desativada nas configurações.
 files-count = { $count ->
     [one] { $count } arquivo
@@ -137,6 +145,9 @@ settings-privilege-backend = Instalar usando
 privilege-auto = PackageKit ou ferramentas do sistema
 privilege-packagekit = Apenas PackageKit
 privilege-native = Apenas ferramentas do sistema
+settings-flatpak-scope = Instalar Flatpaks para
+flatpak-scope-user = Somente eu
+flatpak-scope-system = Todos neste computador
 settings-show-recommends = Mostrar pacotes recomendados
 settings-show-suggests = Mostrar pacotes sugeridos
 settings-show-file-list = Mostrar a lista de arquivos

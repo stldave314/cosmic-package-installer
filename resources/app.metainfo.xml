@@ -34,9 +34,12 @@
       itself never runs as root.
     </p>
     <p>
-      Debian packages are fully supported. RPM, Flatpak and AppImage support is
-      in progress — the application reports honestly which formats the system
-      it is running on can handle.
+      Debian packages, Flatpak bundles and references, and AppImages are all
+      supported. A Flatpak can be installed for you alone or for the whole
+      system, and an AppImage is integrated into your home directory without
+      needing any privileges at all. RPM support is still in progress — the
+      application reports honestly which formats the system it is running on
+      can handle.
     </p>
   </description>
 
@@ -66,6 +69,11 @@
   <url type="bugtracker">https://github.com/stldave314/cosmic-package-installer/issues</url>
 
   <releases>
+    <release version="0.2.0" date="2026-07-28">
+      <description>
+        <p>feat: add Flatpak and AppImage support</p>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-07-28">
       <description>
         <p>fix: ask PackageKit for an interactive transaction so polkit can prompt</p>

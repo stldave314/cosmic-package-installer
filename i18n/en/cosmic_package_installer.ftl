@@ -48,6 +48,8 @@ progress-reinstalling = Reinstalling
 progress-upgrading = Upgrading
 progress-downgrading = Downgrading
 progress-removing = Uninstalling
+progress-copying = Copying the AppImage into place…
+progress-integrating = Adding it to your applications…
 operation-complete = Finished successfully
 operation-failed = The operation did not complete
 
@@ -66,6 +68,9 @@ meta-installed-size = Installed size
 meta-file-size = File size
 meta-path = File
 meta-description = Description
+version-unknown = Unknown
+meta-appimage-metadata = Metadata
+meta-appimage-unread = Could not be read from the file, so only its name and size are shown.
 
 # Dependency kinds
 dep-pre-depends = Required before installation
@@ -85,6 +90,8 @@ dep-status-missing = Not available
 dep-status-unknown = Not checked
 dep-alternatives = or
 dependencies-none = This package declares no dependencies.
+dependencies-bundled = AppImages bundle everything they need, so there is nothing to install alongside this one.
+dependencies-flatpak = This file declares no runtime. Flatpak works out what it needs when it installs it.
 dependencies-resolving = Checking dependencies against your system…
 dependencies-unsatisfiable = { $count ->
     [one] { $count } required dependency cannot be satisfied.
@@ -109,6 +116,7 @@ plan-blocked = This package cannot be installed as things stand:
 
 # Files
 files-none = This package installs no files.
+files-unavailable = A Flatpak bundle carries no file index, so its contents cannot be listed without unpacking the whole thing.
 files-hidden = The file list is turned off in Settings.
 files-count = { $count ->
     [one] { $count } file
@@ -137,6 +145,9 @@ settings-privilege-backend = Install using
 privilege-auto = PackageKit, or system tools
 privilege-packagekit = PackageKit only
 privilege-native = System tools only
+settings-flatpak-scope = Install Flatpaks for
+flatpak-scope-user = Just me
+flatpak-scope-system = Everyone on this computer
 settings-show-recommends = Show recommended packages
 settings-show-suggests = Show suggested packages
 settings-show-file-list = Show the file list

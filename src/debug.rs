@@ -41,6 +41,10 @@ pub const PATH: &str = "/tmp/cosmic-package-installer.log";
 pub const BACKEND: &str = "back";
 /// `.deb` inspection and dependency resolution.
 pub const DEB: &str = "deb";
+/// Flatpak bundle/ref inspection and installation.
+pub const FLATPAK: &str = "fpak";
+/// AppImage inspection and desktop integration.
+pub const APPIMAGE: &str = "aimg";
 /// External command invocations and their exit status.
 pub const EXEC: &str = "exec";
 /// PackageKit D-Bus transactions.

@@ -18,6 +18,7 @@ use std::{collections::HashMap, path::Path};
 use cosmic::widget::icon;
 
 use super::{
+    desktop,
     exec::{self, Stream},
     Action, Availability, Backend, Dependency, DependencyAlternative, DependencyKind,
     DependencyStatus, Error, InstalledState, OperationPlan, PackageDetails, PackageFormat,
@@ -662,36 +663,7 @@ fn desktop_entry_name(path: &Path, entries: &[(String, PayloadEntry)]) -> Option
     let archive_name = find_desktop_entry(entries)?;
     let bytes = extract_file(path, archive_name)?;
     let text = String::from_utf8_lossy(&bytes);
-    desktop_field(&text, "Name")
-}
-
-/// Read an unlocalised field from the `[Desktop Entry]` group.
-///
-/// Localised variants (`Name[de]`) are skipped deliberately: matching them
-/// against the user's locale properly is the desktop-entry spec's job, and
-/// getting it half-right would show a German name to a French user.
-fn desktop_field(text: &str, field: &str) -> Option<String> {
-    let mut in_entry_group = false;
-    for line in text.lines() {
-        let line = line.trim();
-        if line.starts_with('[') {
-            in_entry_group = line == "[Desktop Entry]";
-            continue;
-        }
-        if !in_entry_group {
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        if key.trim() == field {
-            let value = value.trim();
-            if !value.is_empty() {
-                return Some(value.to_string());
-            }
-        }
-    }
-    None
+    desktop::field(&text, "Name")
 }
 
 /// Pull an application icon out of the package.
@@ -707,7 +679,7 @@ fn extract_icon(
 ) -> Option<icon::Handle> {
     let desktop_icon = find_desktop_entry(entries)
         .and_then(|archive_name| extract_file(path, archive_name))
-        .and_then(|bytes| desktop_field(&String::from_utf8_lossy(&bytes), "Icon"));
+        .and_then(|bytes| desktop::field(&String::from_utf8_lossy(&bytes), "Icon"));
 
     let mut candidates: Vec<&str> = Vec::new();
 
@@ -769,10 +741,12 @@ fn extract_icon(
             "extracted {archive_name} ({} bytes)",
             bytes.len()
         );
-        if archive_name.to_ascii_lowercase().ends_with(".svg") {
-            return Some(icon::from_svg_bytes(bytes));
+        // Moving on to the next candidate rather than giving up: a package can
+        // ship an icon that will not decode, and the one after it in the list
+        // may well be fine.
+        if let Some(handle) = super::icon_from_bytes(archive_name, bytes) {
+            return Some(handle);
         }
-        return Some(icon::from_raster_bytes(bytes));
     }
 
     debug_log!(crate::debug::ICON, "no icon found in {}", path.display());
@@ -1301,12 +1275,5 @@ mod tests {
         assert_eq!(sizes["hello"].download_size, Some(26_006));
         assert_eq!(sizes["hello"].installed_size, Some(104 * 1024));
         assert_eq!(sizes["goodbye"].installed_size, Some(8 * 1024));
-    }
-
-    #[test]
-    fn reads_unlocalised_desktop_fields_only() {
-        let text = "[Desktop Entry]\nName=Real Name\nName[de]=Deutscher Name\nIcon=my-icon\n\n[Other]\nName=Wrong\n";
-        assert_eq!(desktop_field(text, "Name").as_deref(), Some("Real Name"));
-        assert_eq!(desktop_field(text, "Icon").as_deref(), Some("my-icon"));
     }
 }

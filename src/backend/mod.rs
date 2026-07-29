@@ -18,12 +18,17 @@ use cosmic::widget::icon;
 use crate::fl;
 
 pub mod appimage;
+pub mod appstream;
 pub mod deb;
+pub mod desktop;
 pub mod exec;
 pub mod flatpak;
+pub mod gvariant;
 pub mod packagekit;
+pub mod png;
 pub mod privileged;
 pub mod rpm;
+pub mod xpm;
 
 pub use exec::ExecError;
 
@@ -64,6 +69,23 @@ impl PackageFormat {
             Self::Rpm => fl!("format-rpm"),
             Self::Flatpak => fl!("format-flatpak"),
             Self::AppImage => fl!("format-appimage"),
+        }
+    }
+
+    /// File-name patterns for the open dialog.
+    ///
+    /// Spelled out rather than derived from [`as_str`](Self::as_str), for two
+    /// reasons. The dialog's globs are matched case-sensitively while
+    /// [`from_path`](Self::from_path) is not, and an AppImage is conventionally
+    /// named `.AppImage` — so a single lower-case pattern would hide the very
+    /// files the filter exists to show. And several formats have more than one
+    /// extension, `.flatpakref` and `.ddeb` among them.
+    pub fn globs(self) -> &'static [&'static str] {
+        match self {
+            Self::Deb => &["*.deb", "*.ddeb", "*.udeb"],
+            Self::Rpm => &["*.rpm", "*.RPM"],
+            Self::Flatpak => &["*.flatpak", "*.flatpakref"],
+            Self::AppImage => &["*.appimage", "*.AppImage", "*.APPIMAGE"],
         }
     }
 
@@ -430,6 +452,14 @@ pub struct PackageDetails {
     /// Icon extracted from the package, if it carries one.
     pub icon: Option<icon::Handle>,
     pub payload: Vec<PayloadEntry>,
+    /// Whether [`payload`](Self::payload) is a real answer.
+    ///
+    /// A `.deb` lists its contents in an index the archive carries; a Flatpak
+    /// bundle does not, and enumerating one would mean unpacking the whole
+    /// thing. An empty list and "this format cannot say" are very different
+    /// statements to make to someone asking what a package installs, so the two
+    /// are not allowed to look the same.
+    pub payload_known: bool,
     pub dependencies: Vec<Dependency>,
     /// Remaining format-specific fields, shown verbatim under "Other".
     pub extra: Vec<(String, String)>,
@@ -456,6 +486,7 @@ impl PackageDetails {
             file_size,
             icon: None,
             payload: Vec::new(),
+            payload_known: true,
             dependencies: Vec::new(),
             extra: Vec::new(),
         }
@@ -738,6 +769,185 @@ pub fn format_size(bytes: u64) -> String {
     }
 }
 
+/// Build a toolkit icon from bytes pulled out of a package, given the name the
+/// package filed them under.
+///
+/// Every backend that extracts an icon goes through here, so what counts as a
+/// usable icon is decided once. Anything not listed is refused rather than
+/// handed over and left to fail at draw time, where the failure is silent: an
+/// icon that cannot be decoded draws nothing and says nothing about why.
+///
+/// Returning `None` is a normal outcome, not an error. Callers have a list of
+/// candidates and should move on to the next one.
+pub fn icon_from_bytes(name: &str, bytes: Vec<u8>) -> Option<icon::Handle> {
+    if bytes.is_empty() {
+        return None;
+    }
+
+    // The content decides, not the file name. An AppImage's `.DirIcon` is a
+    // real file with no extension at all, and a mis-named icon should not get
+    // to pick its decoder. Both checks are a few bytes of prefix.
+    if bytes.starts_with(&png::SIGNATURE) {
+        return Some(icon::from_raster_bytes(bytes));
+    }
+    if let Some(image) = xpm::decode(&bytes) {
+        // Decoded here rather than by the toolkit, which has no idea what an
+        // XPM is; see [`xpm`] for why that is worth doing at all.
+        crate::debug_log!(
+            crate::debug::ICON,
+            "decoded a {}x{} XPM",
+            image.width,
+            image.height
+        );
+        return Some(icon::from_raster_pixels(
+            image.width,
+            image.height,
+            image.rgba,
+        ));
+    }
+
+    // SVG has no magic number, so the name gets a say after all — backed up by
+    // a look for the root element, for an SVG hiding behind a bare name.
+    let name = name.to_ascii_lowercase();
+    if name.ends_with(".svg") || looks_like_svg(&bytes) {
+        return Some(icon::from_svg_bytes(bytes));
+    }
+
+    crate::debug_log!(
+        crate::debug::ICON,
+        "ignoring icon {name}: not a format that can be rendered"
+    );
+    None
+}
+
+/// Whether `bytes` plausibly starts an SVG document.
+///
+/// Looks for the `<svg` root element near the start rather than for an XML
+/// declaration, which every AppStream file also has and an SVG may lack.
+fn looks_like_svg(bytes: &[u8]) -> bool {
+    let head = &bytes[..bytes.len().min(512)];
+    head.windows(4).any(|window| window == b"<svg")
+}
+
+/// Compare two version strings, ordering `left` relative to `right`.
+///
+/// For `.deb` this job is delegated to `dpkg`, which is the only thing that
+/// gets Debian epochs and tildes right. Flatpak and AppImage have no such
+/// authority to defer to: a Flatpak version is whatever the AppStream data
+/// says, and an AppImage's is whatever the desktop entry or the file name says.
+/// So they get this — the same digit/non-digit alternation everyone else uses,
+/// and no pretence of understanding a scheme that isn't dotted numbers.
+///
+/// Runs of digits compare numerically, so `1.10` correctly sorts after `1.9`,
+/// and are compared without parsing so a version component too long for any
+/// integer type does not silently wrap.
+pub fn compare_version_strings(left: &str, right: &str) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+
+    let mut left = left.trim();
+    let mut right = right.trim();
+
+    loop {
+        // Separators carry no ordering of their own; only the runs between them
+        // do, and treating `1.2` and `1-2` as different versions would be
+        // inventing a distinction neither format makes.
+        left = left.trim_start_matches(is_version_separator);
+        right = right.trim_start_matches(is_version_separator);
+
+        if left.is_empty() || right.is_empty() {
+            // One version has run out while the other has more to say. What
+            // that means depends on what the other says next.
+            //
+            // If it continues with digits, it is a further component and the
+            // shorter version is the older one: `1.2` precedes `1.2.1`.
+            //
+            // If it continues with letters, that is a pre-release marker and
+            // the *shorter* version is the newer one: `1.0` follows `1.0rc1`.
+            // This is SemVer's rule and the opposite of rpm's, which treats any
+            // trailing text as newer. SemVer is the right one here — these are
+            // AppStream release versions and AppImage file names, where `-rc1`
+            // and `-beta` mean what SemVer says they mean, and calling a
+            // release candidate an upgrade over the release would offer the
+            // user exactly the wrong button.
+            let remainder = if left.is_empty() { right } else { left };
+            let is_prerelease = remainder.starts_with(|c: char| c.is_ascii_alphabetic());
+            let shorter_first = if is_prerelease {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            };
+            return if left.is_empty() && right.is_empty() {
+                Ordering::Equal
+            } else if left.is_empty() {
+                shorter_first
+            } else {
+                shorter_first.reverse()
+            };
+        }
+
+        let (left_run, left_rest) = take_run(left);
+        let (right_run, right_rest) = take_run(right);
+
+        let left_numeric = left_run.starts_with(|c: char| c.is_ascii_digit());
+        let right_numeric = right_run.starts_with(|c: char| c.is_ascii_digit());
+
+        let ordering = match (left_numeric, right_numeric) {
+            (true, true) => {
+                // Leading zeros are padding, not magnitude.
+                let left_digits = left_run.trim_start_matches('0');
+                let right_digits = right_run.trim_start_matches('0');
+                left_digits
+                    .len()
+                    .cmp(&right_digits.len())
+                    .then_with(|| left_digits.cmp(right_digits))
+            }
+            // A number outranks a word, which puts `1.0` after `1.0rc` rather
+            // than sorting the release candidate over the release.
+            (true, false) => Ordering::Greater,
+            (false, true) => Ordering::Less,
+            (false, false) => left_run.cmp(right_run),
+        };
+
+        if ordering != Ordering::Equal {
+            return ordering;
+        }
+
+        left = left_rest;
+        right = right_rest;
+    }
+}
+
+fn is_version_separator(character: char) -> bool {
+    !character.is_ascii_alphanumeric()
+}
+
+/// Split off the leading run of digits, or of non-digits, whichever starts the
+/// string.
+fn take_run(text: &str) -> (&str, &str) {
+    let numeric = text.starts_with(|c: char| c.is_ascii_digit());
+    let end = text
+        .find(|c: char| {
+            !c.is_ascii_alphanumeric() || c.is_ascii_digit() != numeric
+        })
+        .unwrap_or(text.len());
+    text.split_at(end)
+}
+
+/// Turn a version comparison into the state the UI reports.
+pub fn installed_state_from_versions(file: &str, installed: &str) -> InstalledState {
+    match compare_version_strings(file, installed) {
+        std::cmp::Ordering::Equal => InstalledState::SameVersion {
+            installed: installed.to_string(),
+        },
+        std::cmp::Ordering::Greater => InstalledState::Older {
+            installed: installed.to_string(),
+        },
+        std::cmp::Ordering::Less => InstalledState::Newer {
+            installed: installed.to_string(),
+        },
+    }
+}
+
 /// Format a signed byte count, for a disk-usage delta that may free space.
 pub fn format_size_delta(bytes: i64) -> String {
     let magnitude = format_size(bytes.unsigned_abs());
@@ -745,5 +955,91 @@ pub fn format_size_delta(bytes: i64) -> String {
         format!("−{magnitude}")
     } else {
         format!("+{magnitude}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cmp::Ordering;
+
+    #[test]
+    fn version_components_compare_numerically() {
+        // The whole reason not to compare as strings: "10" sorts before "9"
+        // lexically, which would report an upgrade as a downgrade.
+        assert_eq!(compare_version_strings("1.10", "1.9"), Ordering::Greater);
+        assert_eq!(compare_version_strings("1.2.3", "1.2.3"), Ordering::Equal);
+        assert_eq!(compare_version_strings("2.0", "10.0"), Ordering::Less);
+        // Leading zeros are padding, not magnitude.
+        assert_eq!(compare_version_strings("1.007", "1.7"), Ordering::Equal);
+        // A version that runs out first is the older one.
+        assert_eq!(compare_version_strings("1.2", "1.2.1"), Ordering::Less);
+    }
+
+    #[test]
+    fn a_release_outranks_its_own_prereleases() {
+        assert_eq!(compare_version_strings("1.0", "1.0rc1"), Ordering::Greater);
+        assert_eq!(compare_version_strings("1.0.0-rc1", "1.0.0"), Ordering::Less);
+        assert_eq!(compare_version_strings("2.0-beta", "2.0"), Ordering::Less);
+        assert_eq!(
+            compare_version_strings("1.0beta", "1.0alpha"),
+            Ordering::Greater
+        );
+        // A further numeric component still means newer, which is the case the
+        // pre-release rule must not swallow.
+        assert_eq!(compare_version_strings("1.2.1", "1.2"), Ordering::Greater);
+    }
+
+    #[test]
+    fn separators_do_not_change_the_ordering() {
+        assert_eq!(compare_version_strings("1.2-3", "1.2.3"), Ordering::Equal);
+        assert_eq!(compare_version_strings(" 1.2 ", "1.2"), Ordering::Equal);
+        assert_eq!(compare_version_strings("v1.2", "v1.2"), Ordering::Equal);
+    }
+
+    #[test]
+    fn a_component_too_long_for_an_integer_still_compares() {
+        // Compared digit by digit rather than parsed, so nothing wraps.
+        let long = "1.99999999999999999999999999999999";
+        assert_eq!(compare_version_strings(long, "1.9"), Ordering::Greater);
+        assert_eq!(compare_version_strings(long, long), Ordering::Equal);
+    }
+
+    #[test]
+    fn the_installed_state_follows_the_comparison() {
+        assert_eq!(
+            installed_state_from_versions("2.0", "1.0"),
+            InstalledState::Older {
+                installed: "1.0".to_string()
+            }
+        );
+        assert_eq!(
+            installed_state_from_versions("1.0", "2.0"),
+            InstalledState::Newer {
+                installed: "2.0".to_string()
+            }
+        );
+        assert_eq!(
+            installed_state_from_versions("1.0", "1.0"),
+            InstalledState::SameVersion {
+                installed: "1.0".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn every_format_is_matched_by_at_least_one_of_its_own_globs() {
+        // A filter that does not match the files it is named after is worse
+        // than no filter, and the case-sensitivity of the two sides differs.
+        for format in PackageFormat::ALL {
+            for glob in format.globs() {
+                let name = glob.replace('*', "example");
+                assert_eq!(
+                    PackageFormat::from_path(Path::new(&name)),
+                    Some(*format),
+                    "{glob} should be recognised as {format}"
+                );
+            }
+        }
     }
 }

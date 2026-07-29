@@ -48,6 +48,8 @@ progress-reinstalling = Bezig met opnieuw installeren
 progress-upgrading = Bezig met bijwerken
 progress-downgrading = Bezig met terugzetten
 progress-removing = Bezig met verwijderen
+progress-copying = Bezig met kopiëren van de AppImage…
+progress-integrating = Bezig met toevoegen aan uw toepassingen…
 operation-complete = Succesvol voltooid
 operation-failed = De bewerking is niet voltooid
 
@@ -66,6 +68,9 @@ meta-installed-size = Geïnstalleerde grootte
 meta-file-size = Bestandsgrootte
 meta-path = Bestand
 meta-description = Beschrijving
+version-unknown = Onbekend
+meta-appimage-metadata = Metagegevens
+meta-appimage-unread = Konden niet uit het bestand worden gelezen; alleen de naam en de grootte worden getoond.
 
 # Dependency kinds
 dep-pre-depends = Vereist vóór installatie
@@ -85,6 +90,8 @@ dep-status-missing = Niet beschikbaar
 dep-status-unknown = Niet gecontroleerd
 dep-alternatives = of
 dependencies-none = Dit pakket declareert geen afhankelijkheden.
+dependencies-bundled = AppImages bevatten alles wat ze nodig hebben, dus er hoeft niets extra’s geïnstalleerd te worden.
+dependencies-flatpak = Dit bestand vermeldt geen runtime. Flatpak bepaalt bij de installatie wat er nodig is.
 dependencies-resolving = Afhankelijkheden worden op uw systeem gecontroleerd…
 dependencies-unsatisfiable = { $count ->
     [one] Aan { $count } vereiste afhankelijkheid kan niet worden voldaan.
@@ -109,6 +116,7 @@ plan-blocked = Dit pakket kan zo niet worden geïnstalleerd:
 
 # Files
 files-none = Dit pakket installeert geen bestanden.
+files-unavailable = Een Flatpak-bundel bevat geen bestandsindex, dus de inhoud kan niet worden getoond zonder alles uit te pakken.
 files-hidden = De bestandenlijst staat uit in de instellingen.
 files-count = { $count ->
     [one] { $count } bestand
@@ -137,6 +145,9 @@ settings-privilege-backend = Installeren met
 privilege-auto = PackageKit, of systeemgereedschap
 privilege-packagekit = Alleen PackageKit
 privilege-native = Alleen systeemgereedschap
+settings-flatpak-scope = Flatpaks installeren voor
+flatpak-scope-user = Alleen mij
+flatpak-scope-system = Iedereen op deze computer
 settings-show-recommends = Aanbevolen pakketten tonen
 settings-show-suggests = Voorgestelde pakketten tonen
 settings-show-file-list = Bestandenlijst tonen
